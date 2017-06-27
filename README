@@ -28,7 +28,7 @@ a simple way is to execute something like below
 	LD_PRELOAD=/path/libmtrace.so /usr/bin/application  
   
 A more appropriate way is to use install_hook.sh script. It will setup  
-the tracing and correrctly pass all the env var/params to the application.  
+the tracing and correctly pass all the env var/params to the application.  
   
   
 mtrace has several options that control its behavior. I recommend  
@@ -64,8 +64,8 @@ Example:
   
   
   compressed output saves a lot of space and CPU time; compared to full  
-  human-readable output. for instacne, org.volt.firstscreen  does so many  
-  small allocations that the tracing file can be several hundred megabytes  
+  human-readable output. for instance, if app ABC does too many small  
+  allocations then the tracing file can be several hundred megabytes  
   in size.  
   
   there is a special application (parser) that processes that output and  
