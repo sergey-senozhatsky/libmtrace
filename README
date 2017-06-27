@@ -1,0 +1,191 @@
+MTRACE  
+================================================================================  
+  
+0) What is mtrace  
+  
+mtrace is a shared library that intercepts and logs glibc/libstdc++ memory  
+allocation/release calls. It's based on LD_PRELOAD mechanism.  
+  
+  
+1) How to build  
+  
+	./autogen.sh  
+	./configure --prefix=/path_to_mtrace_src/build  
+	make  
+	make install  
+  
+  
+The libmtrace.so file will be in build/libs directory and parser tool  
+will be in build/bin.  
+  
+You can specify an alternative --prefix path.  
+  
+  
+2) How to use mtrace  
+  
+a simple way is to execute something like below  
+  
+	LD_PRELOAD=/path/libmtrace.so /usr/bin/application  
+  
+A more appropriate way is to use install_hook.sh script. It will setup  
+the tracing and correrctly pass all the env var/params to the application.  
+  
+  
+mtrace has several options that control its behavior. I recommend  
+MTRACE_ALLOC_MINWMARK/MTRACE_ALLOC_MAXWMARK (see below).  
+  
+  
+  
+-  MTRACE_LOG_DIR=path  
+  
+   create tracing data files under provided directory, instead of stderr.  
+   tracing file names have the following naming format:  
+  
+	path/mtrace-${APPLICATION_NAME}-${PID}  
+  
+Example:  
+  
+	*** Trace file name: `tailf /tmp/mtrace-parser-16233'  
+  
+- MTRACE_HUMAN_READABLE=1  
+  
+  by default mtrace produces a "compressed" output, which is hard to read.  
+  
+Example:  
+  
+[pid:25412] [ts:1489656373.964649] malloc(952) = 0x11ed310 [ts:0.000000]  
+#26b43bf1#9#71  
+#26b444c5#1#2f5  
+#26b435e7#2#f7  
+#26b42dbc#3#16c  
+#4028ea#4#3a  
+#26b39511#5#f1  
+#40405a#7#2a  
+  
+  
+  compressed output saves a lot of space and CPU time; compared to full  
+  human-readable output. for instacne, org.volt.firstscreen  does so many  
+  small allocations that the tracing file can be several hundred megabytes  
+  in size.  
+  
+  there is a special application (parser) that processes that output and  
+  turns it into a human readable format (HTML report).  
+  
+- MTRACE_BACKTRACE_DEPTH=NUM  
+  
+  sometimes we don't care about the entire backtrace (which starts with  
+  main()), but care about top NUM frames only. This options lets to set  
+  such a limit. Only top NUM frames will be resolved and printed to the  
+  output stream.  
+  
+- MTRACE_REPORTING_MODE=string  
+  
+  In order to save CPU time and space, mtrace has several options that  
+  control output format. By default, mtrace outputs only backtraces of  
+  call paths that increased the memory usage (we try to detect changes  
+  in  /proc/[pid]/statm file). Memory free events are recorded as event  
+  headers only, with out any backtraces, because we, basically, are not  
+  so interested in memory free paths.  
+  
+  so default output (with MTRACE_HUMAN_READABLE=1) looks like this  
+  
+  
+[pid:27429] [ts:1489656883.593174] malloc(80) = 0x184a9e0 [ts:0.000000]  
+ # [<0x7fd07bf1>] _nl_intern_locale_data+0x71  
+ # [<0x7fd084c5>] _nl_load_locale_from_archive+0x2f5  
+ # [<0x7fd075e7>] _nl_find_locale+0xf7  
+ # [<0x7fd06dbc>] setlocale+0x16c  
+ # [<0x4028ea>] _init+0x3a  
+ # [<0x7fcfd511>] __libc_start_main+0xf1  
+ # [<0x40405a>] ?+0x40405a  
+[pid:27429] [ts:1489656883.593410] malloc(192) = 0x184aa60 [ts:0.000000]  
+ # [<0x7fd07bf1>] _nl_intern_locale_data+0x71  
+ # [<0x7fd084c5>] _nl_load_locale_from_archive+0x2f5  
+ # [<0x7fd075e7>] _nl_find_locale+0xf7  
+ # [<0x7fd06dbc>] setlocale+0x16c  
+ # [<0x4028ea>] _init+0x3a  
+ # [<0x7fcfd511>] __libc_start_main+0xf1  
+ # [<0x40405a>] ?+0x40405a  
+[pid:27429] [ts:1489656883.602176] free(0x0) [ts:0.000000]  
+[pid:27429] [ts:1489656883.602203] free(0x184fb10) [ts:0.000001]  
+[pid:27429] [ts:1489656883.602237] free(0x1855d40) [ts:0.000001]  
+  
+note, there are backtraces for malloc(), but no backtraces for free().  
+this saves a lot of CPU time on application that do millions of small  
+allocations.  
+  
+  
+- MTRACE_REPORTING_MODE=<string>  can be  
+  --     alloc  
+  
+          report only memory allocation events (all of them) with backtraces.  
+          e.g. mmap, malloc, etc.  
+  
+  --     atop  
+  
+          in this mode, mtrace will backtrace only events that have set new  
+          allocation "record". so basically this will produce a list of  
+          increasing in size allocations.  
+  
+          for example:  
+  
+          malloc(10)     -- backtrace, set "record" to 10  
+          malloc(5)       -- no backtrace.  
+          malloc(5)       -- no backtrace.   
+          malloc(5)       -- no backtrace.   
+          malloc(5)       -- no backtrace.   
+          malloc(15)     -- backtrace. because 15 is greater than "10"  
+  
+         this allows to filter out a lot of noise from the output.  
+  
+   --    full  
+  
+         as the name suggests, this is "full" report mode. every event is  
+         getting backtraced. it may be quite slow. many malloc() calls are  
+         served by glibc internally, and don't result in new pages allocation.  
+         so it's mostly noise in the output. for instance,  
+  
+      ptr = malloc(5)  
+      free(ptr)  
+      ptre = malloc(5)  
+      free(ptr)  
+      ....  
+  
+         these malloc-s will re-use the same page, which has already been  
+         allocation and assigned to the process.  
+  
+  
+  
+Thus, I, personally, recommend another reporting mode, which is based on  
+low/high memory allocation size filtering.  
+  
+  
+- MTRACE_ALLOC_MINWMARK=<num>  
+ num is in bytes by default, but can have memory prefix - 100M, 1G.  
+  
+  
+In this mode mtrace will backtrace only memory allocation calls of sizes  
+greater than given min watermark. E.g. with MTRACE_ALLOC_MINWMARK=300  
+malloc(100) will not be backtraces, while malloc(400) will be.  
+  
+  
+- MTRACE_ALLOC_MAXWMARK=<num>  
+ num is in bytes by default, but can have memory prefix - 100M, 1G.  
+  
+In this mode mtrace will backtrace only memory allocation calls of sizes  
+less than given max watermark. E.g. with MTRACE_ALLOC_MINWMARK=300  
+malloc(100) will be backtraces, while malloc(400) will not be.  
+  
+  
+It's is possible to provide both min and max watermarks simultaneously,  
+so mtrace will backtrace only memory allocation calls of sizes from a  
+given range.  
+  
+  
+  
+PARSER  
+================================================================================  
+  
+parser is a simple application that decodes given "compressed" mtrace file  
+and converts into a human readable HTML report.  
+
