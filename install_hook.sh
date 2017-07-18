@@ -4,7 +4,10 @@ MTRACE_PATH=./build/lib/
 
 function remount_rootfs_rw
 {
-	return 0
+	if [ $1 -eq 0 ]; then
+		return 0
+	fi
+
 	sync
 
 	mount -o remount,rw /
@@ -16,7 +19,10 @@ function remount_rootfs_rw
 
 function remount_rootfs_ro
 {
-	return 0
+	if [ $1 -eq 0 ]; then
+		return 0
+	fi
+
 	sync
 
 	mount -o remount,ro /
@@ -29,6 +35,7 @@ function remount_rootfs_ro
 function install
 {
 	local path=$1
+	local remount=$2
 
 	if [ "z$path" == "z" ]; then
 		echo "No application path was provided"
@@ -50,7 +57,7 @@ function install
 		exit 5
 	fi
 
-	remount_rootfs_rw
+	remount_rootfs_rw $remount
 
 	mv $path $path"_"
 
@@ -63,7 +70,7 @@ EOF
 
 	chmod +x $path
 
-	remount_rootfs_ro
+	remount_rootfs_ro $remount
 
 	return 0
 }
@@ -71,6 +78,7 @@ EOF
 function uninstall
 {
 	local path=$1
+	local remount=$2
 
 	if [ "z$path" == "z" ]; then
 		echo "No application path was provided"
@@ -87,26 +95,43 @@ function uninstall
 		exit 4
 	fi
 
-	remount_rootfs_rw
+	remount_rootfs_rw $remount
 
 	rm $path
 	mv $path"_" $path
 
-	remount_rootfs_ro
+	remount_rootfs_ro $remount
 
 	return 0
 }
 
-if [ "z$1" == "zinstall" ]; then
-	install $2
-	exit $?
-fi
+function main
+{
+	if [ "z$1" == "zinstall" -o "z$1" == "zrinstall" ]; then
+		local remount=0
 
-if [ "z$1" == "zuninstall" ]; then
-	uninstall $2
-	exit $?
-fi
+		if [ "z$1" == "zrinstall" ]; then
+			remount=1
+		fi
+
+		install $2 $remount
+		exit $?
+	fi
+
+	if [ "z$1" == "zuninstall" -o "z$1" == "zruninstall" ]; then
+		local remount=0
+
+		if [ "z$1" == "zruninstall" ]; then
+			remount=1
+		fi
+		uninstall $2 $remount
+		exit $?
+	fi
+}
+
+main $1 $2
 
 echo "Usage example:"
 echo "install_hook.sh install|uninstall /path/application"
+echo "                rinstall|runinstall - to force remount of FS in rw mode"
 exit 3
