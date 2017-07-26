@@ -33,6 +33,14 @@ a simple way is to execute something like below
 A more appropriate way is to use install_hook.sh script. It will setup  
 the tracing and correctly pass all the env var/params to the application.  
   
+Usage example:  
+  
+to install a hook:  
+./install_hook.sh install /usr/apps/binary  
+  
+to uninstall a hook:  
+./install_hook.sh uninstall /usr/apps/binary  
+  
   
 mtrace has several options that control its behavior. I recommend  
 MTRACE_ALLOC_MINWMARK/MTRACE_ALLOC_MAXWMARK (see below).  
