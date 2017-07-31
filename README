@@ -42,6 +42,12 @@ to uninstall a hook:
 ./install_hook.sh uninstall /usr/apps/binary  
   
   
+install_hook.sh also can handle an array of targets (applications to trace).  
+For example  
+./install_hook.sh install /usr/apps/foo /usr/apps/bar /usr/apps/xyz  
+./install_hook.sh uninstall /usr/apps/foo /usr/apps/bar /usr/apps/xyz  
+  
+  
 mtrace has several options that control its behavior. I recommend  
 MTRACE_ALLOC_MINWMARK/MTRACE_ALLOC_MAXWMARK (see below).  
   
